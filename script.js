@@ -6,8 +6,10 @@ class ParticleCanvas {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
         this.particles = [];
-        this.particleCount = 80;
-        this.connectionDistance = 150;
+        
+        // Reduce particles on mobile for better performance
+        this.particleCount = window.innerWidth < 768 ? 30 : 80;
+        this.connectionDistance = window.innerWidth < 768 ? 100 : 150;
         
         this.init();
         this.animate();
@@ -96,9 +98,19 @@ class ParticleCanvas {
     }
     
     handleResize() {
+        let resizeTimeout;
         window.addEventListener('resize', () => {
-            this.resize();
-            this.createParticles();
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                this.resize();
+                // Only recreate particles if screen size category changed
+                const newCount = window.innerWidth < 768 ? 30 : 80;
+                if (newCount !== this.particleCount) {
+                    this.particleCount = newCount;
+                    this.connectionDistance = window.innerWidth < 768 ? 100 : 150;
+                    this.createParticles();
+                }
+            }, 250);
         });
     }
 }
@@ -162,20 +174,25 @@ function initScrollAnimations() {
 }
 
 // ==========================================
-// PARALLAX EFFECT
+// PARALLAX EFFECT - Optimized with throttling
 // ==========================================
 function initParallax() {
+    // Disable on mobile for better performance
+    if (window.innerWidth < 768) return;
+    
     let ticking = false;
+    let lastScrollY = 0;
     
     window.addEventListener('scroll', () => {
+        lastScrollY = window.pageYOffset;
+        
         if (!ticking) {
             window.requestAnimationFrame(() => {
-                const scrolled = window.pageYOffset;
                 const parallaxElements = document.querySelectorAll('.hologram-circle');
                 
                 parallaxElements.forEach((el, index) => {
-                    const speed = 0.5 + (index * 0.1);
-                    const yPos = -(scrolled * speed);
+                    const speed = 0.3 + (index * 0.1); // Reduced speed
+                    const yPos = -(lastScrollY * speed);
                     el.style.transform = `translateY(${yPos}px)`;
                 });
                 
@@ -184,7 +201,7 @@ function initParallax() {
             
             ticking = true;
         }
-    });
+    }, { passive: true }); // Add passive for better scroll performance
 }
 
 // ==========================================
@@ -216,10 +233,11 @@ function initNavbarScroll() {
 }
 
 // ==========================================
-// CARD HOVER EFFECTS
+// CARD HOVER EFFECTS - Optimized for mobile
 // ==========================================
 function initCardEffects() {
     const cards = document.querySelectorAll('.feature-card, .blockchain-card, .step-card');
+    const isMobile = window.innerWidth < 768;
     
     cards.forEach(card => {
         card.addEventListener('mouseenter', function() {
@@ -230,24 +248,26 @@ function initCardEffects() {
             this.style.zIndex = '1';
         });
         
-        // 3D tilt effect on hover
-        card.addEventListener('mousemove', function(e) {
-            const rect = this.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+        // Disable 3D tilt effect on mobile for better performance
+        if (!isMobile) {
+            card.addEventListener('mousemove', function(e) {
+                const rect = this.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+                
+                const rotateX = (y - centerY) / 20;
+                const rotateY = (centerX - x) / 20;
+                
+                this.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-10px)`;
+            });
             
-            const centerX = rect.width / 2;
-            const centerY = rect.height / 2;
-            
-            const rotateX = (y - centerY) / 20;
-            const rotateY = (centerX - x) / 20;
-            
-            this.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-10px)`;
-        });
-        
-        card.addEventListener('mouseleave', function() {
-            this.style.transform = '';
-        });
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = '';
+            });
+        }
     });
 }
 
@@ -447,7 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Core features
     const canvas = document.getElementById('particleCanvas');
     if (canvas) {
-        new ParticleCanvas(canvas);
+        window.particleCanvas = new ParticleCanvas(canvas);
     }
     
     initSmoothScroll();
@@ -460,32 +480,32 @@ document.addEventListener('DOMContentLoaded', () => {
     initMobileMenu();
     optimizePerformance();
     
-    // Optional effects (can be commented out for better performance)
-    // initCursorGlow();
-    // initTypingEffect();
+    // Disable heavy effects on mobile
+    if (window.innerWidth > 768) {
+        // initCursorGlow(); // Uncomment if you want cursor effect
+    }
     
     console.log('%c🚀 Crypto Wallet Bot ', 'background: #7c3aed; color: white; font-size: 20px; padding: 10px;');
     console.log('%cWebsite loaded successfully!', 'color: #7c3aed; font-size: 14px;');
 });
 
-// Handle window resize
+// Handle window resize - NO AUTO RELOAD
 let resizeTimer;
 window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-        // Reinitialize on resize if needed
-        location.reload();
+        // Just resize canvas, no reload needed
+        const canvas = document.getElementById('particleCanvas');
+        if (canvas && window.particleCanvas) {
+            window.particleCanvas.resize();
+        }
     }, 250);
 });
 
-// Prevent context menu on production (optional)
-// document.addEventListener('contextmenu', e => e.preventDefault());
-
-// Log performance metrics (optional)
-window.addEventListener('load', () => {
-    setTimeout(() => {
-        const perfData = window.performance.timing;
-        const pageLoadTime = perfData.loadEventEnd - perfData.navigationStart;
-        console.log(`⚡ Page loaded in ${pageLoadTime}ms`);
-    }, 0);
-});
+// Reduced motion support
+if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    document.querySelectorAll('*').forEach(el => {
+        el.style.animation = 'none';
+        el.style.transition = 'none';
+    });
+}
